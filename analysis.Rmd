@@ -17,7 +17,7 @@ rm(list = ls())
 graphics.off()
 
 # Load R packages
-packages <- c("dplyr", "ggplot2", "caret", "janitor") # list of packages to load
+packages <- c("dplyr", "ggplot2", "caret", "janitor", "lubridate", "purrr", "kableExtra", "tidyr") # list of packages to load
 package.check <- lapply( # load or install & load list of packages
   packages,
   FUN = function(x) {
@@ -32,10 +32,12 @@ rm(packages, package.check)
 
 ## Introduction
 
+In this analysis we are focusing on data gathered from accelerometers, which were attached on participants' belt, forearm, arm, and dumbbell, and were colecting data regarding exercises. In the data collection process 6 participants were participating. The main goal of the analysis is to build a machine learning algorithm that will be able to predict the manner in which participants did the exercise using the data collected on accelometers.
 
-## Data preparation
 
-In this project data was provided by group of researchers who made provided publication titled **Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements** (reference here [url](http://groupware.les.inf.puc-rio.br/work.jsf?p1=10335)).
+## Data 
+
+In this project data was provided by group of researchers who written publication titled **Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements** (reference here [url](http://groupware.les.inf.puc-rio.br/work.jsf?p1=10335)).
 
 
 We have obtained two separate data files (stored in *.csv* format):
@@ -102,6 +104,90 @@ test  <- pml_training[-train_rows, ] # test data set
 ### Data wrangle
 
 
+Now we will check if there are any columns that have a lot of missing values NAs (potential imputation or removing columns):
+
+```{r NAs}
+# calculate % of missing rows in each column and show top missing NA vars
+NAs <- map(train, ~sum(is.na(.))) %>% 
+  unlist() / nrow(train) 
+
+NAs <- data.frame(var = names(NAs),
+                  missing = NAs) %>% 
+  mutate(missing = round(missing * 100, digits = 1)) %>% 
+  rename(`missing rows %` = missing) %>% 
+  arrange(desc(`missing rows %`))
+
+rownames(NAs) <- NULL
+
+# variables to drop
+drop.vars <- NAs %>% filter(`missing rows %` > 50) %>% pull(var) # list of columns to drop (more then 50 % NA)
+
+NAs %>% 
+  kbl() %>% 
+  kable_paper() %>%
+  scroll_box(width = "500px", height = "500px")
+
+```
+
+There are `r length(drop.vars)` variables with almost all missing values. We will drop these variables, since there aren't any added value, if we put them into our modeling procedure. Lets drop columns from train and test dataset:
+
+
+```{r dropmissingvars}
+train <- train %>% select(-drop.vars) 
+test  <- test %>% select(-drop.vars) 
+```
+
+
+Let see which columns are characters (potential conversion to numeric or factor, or to drop columns). On a first sight we think we must have most of the columns numeric. Some strange values can prevent numeric variables to becoming numeric,
+
+```{r whichcolchar}
+# check which columns are characters (potential transformation to numeric or to drop columns)
+charvars <- colnames(train)[train %>% lapply(class) == "character"]
+charvars
+
+```
+
+If we omit columns such as: "user_name", "cvtd_timestamp", "new_window", "classe", we think based on the column names we are dealing with numeric columns. Lets check check their summaries and try to find strange values:
+
+```{r strangevalues}
+strangevalues <- train[,charvars] %>% 
+  select(-c("user_name", "cvtd_timestamp", "new_window", "classe")) 
+
+strangevalues <- strangevalues %>% 
+  map(., pull(.)) %>% 
+  unlist()
+
+#%>% 
+  pull(.)
+data.frame(values = strangevalues) %>% 
+  count(values) %>% 
+  arrange(desc(n))
+  
+```
+
+
+
+
+<!-- First lets apply some essential variable data types transformations (on test and train data sets). We will be transforming variables and dropping variables that are not needed. First for the training set: -->
+
+<!-- ```{r columnstranstrain} -->
+<!-- train_ <- train %>%  -->
+<!--   mutate(classe = as.factor(classe), # convert outcome to factor variable -->
+<!--          cvtd_timestamp = dmy_hm(cvtd_timestamp) # convert to date time object -->
+<!--          ) %>%  -->
+<!--   select(-drop.vars) # drop variables wit too many missing observations -->
+<!-- ``` -->
+
+
+
+
+<!-- ```{r XXXX} -->
+<!-- train_ <- train %>%  -->
+<!--   mutate(classe = as.factor(classe), # convert outcome to factor variable -->
+<!--          cvtd_timestamp = dmy_hm(cvtd_timestamp) # convert to date time object -->
+<!--          ) %>%  -->
+<!--   select(-drop.vars) # drop variables wit too many missing observations -->
+<!-- ``` -->
 
 
 ## Exploratory Data Analysis (EDA)
