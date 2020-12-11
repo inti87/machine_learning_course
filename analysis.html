@@ -612,7 +612,8 @@ pml_testing &lt;- read.csv(file = &quot;./data/pmltesting.csv&quot;, header = T,
 <div id="data-split" class="section level3">
 <h3>Data split</h3>
 <p>Now let’s do the splitting of <strong>pml_training</strong> data source using caret package.</p>
-<pre class="r"><code>train_rows &lt;- createDataPartition(y = pml_training$classe, p = .75, list = F) # do the splitting 
+<pre class="r"><code>set.seed(11235) # seed for split
+train_rows &lt;- createDataPartition(y = pml_training$classe, p = .75, list = F) # do the splitting 
 
 train &lt;- pml_training[train_rows, ] # train data set
 test  &lt;- pml_training[-train_rows, ] # test data set</code></pre>
@@ -620,1317 +621,24 @@ test  &lt;- pml_training[-train_rows, ] # test data set</code></pre>
 <div id="data-wrangle" class="section level3">
 <h3>Data wrangle</h3>
 <p>Now we will check if there are any columns that have a lot of missing values NAs (potential imputation or removing columns):</p>
-<pre class="r"><code># calculate % of missing rows in each column and show top missing NA vars
+<pre class="r"><code># calculate % of missing rows in each column 
 NAs &lt;- map(train, ~sum(is.na(.))) %&gt;% 
   unlist() / nrow(train) 
 
+# create a DF: var and % of missing values in that var
 NAs &lt;- data.frame(var = names(NAs),
                   missing = NAs) %&gt;% 
   mutate(missing = round(missing * 100, digits = 1)) %&gt;% 
   rename(`missing rows %` = missing) %&gt;% 
   arrange(desc(`missing rows %`))
-
 rownames(NAs) &lt;- NULL
 
-# variables to drop
-drop.vars &lt;- NAs %&gt;% filter(`missing rows %` &gt; 50) %&gt;% pull(var) # list of columns to drop (more then 50 % NA)
-
-NAs %&gt;% 
-  kbl() %&gt;% 
-  kable_paper() %&gt;%
-  scroll_box(width = &quot;500px&quot;, height = &quot;500px&quot;)</code></pre>
-<div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:500px; overflow-x: scroll; width:500px; ">
-<table class=" lightable-paper" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
-<thead>
-<tr>
-<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
-var
-</th>
-<th style="text-align:right;position: sticky; top:0; background-color: #FFFFFF;">
-missing rows %
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left;">
-max_roll_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_picth_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_roll_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_pitch_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_roll_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_pitch_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_total_accel_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_roll_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_roll_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_roll_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_pitch_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_pitch_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_pitch_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_yaw_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_yaw_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_yaw_belt
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_accel_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_roll_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_roll_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_roll_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_pitch_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_pitch_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_pitch_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_yaw_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_yaw_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_yaw_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_roll_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_picth_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_yaw_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_roll_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_pitch_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_yaw_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_roll_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_pitch_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_yaw_arm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_roll_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_picth_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_roll_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_pitch_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_roll_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_pitch_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_accel_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_roll_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_roll_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_roll_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_pitch_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_pitch_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_pitch_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_roll_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_picth_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_roll_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_pitch_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_roll_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_pitch_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_accel_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_roll_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_roll_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_roll_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_pitch_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_pitch_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_pitch_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-avg_yaw_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-stddev_yaw_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-var_yaw_forearm
-</td>
-<td style="text-align:right;">
-98
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-user_name
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-raw_timestamp_part_1
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-raw_timestamp_part_2
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-cvtd_timestamp
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-new_window
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-num_window
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-roll_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-pitch_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-yaw_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-total_accel_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_roll_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_picth_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_yaw_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_roll_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_roll_belt_1
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_yaw_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_yaw_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_yaw_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_yaw_belt
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_belt_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_belt_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_belt_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_belt_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_belt_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_belt_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_belt_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_belt_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_belt_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-roll_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-pitch_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-yaw_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-total_accel_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_arm_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_arm_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_arm_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_arm_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_arm_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_arm_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_arm_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_arm_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_arm_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_roll_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_picth_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_yaw_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_roll_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_pitch_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_yaw_arm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-roll_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-pitch_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-yaw_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_roll_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_picth_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_roll_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_pitch_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_yaw_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-total_accel_dumbbell
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_dumbbell_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_dumbbell_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_dumbbell_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_dumbbell_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_dumbbell_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_dumbbell_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_dumbbell_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_dumbbell_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_dumbbell_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-roll_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-pitch_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-yaw_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_roll_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_picth_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-kurtosis_yaw_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_roll_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_pitch_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-skewness_yaw_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-max_yaw_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-min_yaw_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-amplitude_yaw_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-total_accel_forearm
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_forearm_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_forearm_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-gyros_forearm_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_forearm_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_forearm_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-accel_forearm_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_forearm_x
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_forearm_y
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-magnet_forearm_z
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-classe
-</td>
-<td style="text-align:right;">
-0
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>There are 67 variables with almost all missing values. We will drop these variables, since there aren’t any added value, if we put them into our modeling procedure. Lets drop columns from train and test dataset:</p>
+# extract names of variables to drop
+drop.vars &lt;- NAs %&gt;% filter(`missing rows %` &gt; 90) %&gt;% pull(var) # list of columns to drop (more then 50 % NA)</code></pre>
+<p>There are 67 variables with almost all missing values. We will drop these variables, since there aren’t any added value, if we put them into our modeling procedure. Lets drop columns from train and test data set:</p>
 <pre class="r"><code>train &lt;- train %&gt;% select(-drop.vars) 
 test  &lt;- test %&gt;% select(-drop.vars) </code></pre>
-<p>Let see which columns are characters (potential conversion to numeric or factor, or to drop columns). On a first sight we think we must have most of the columns numeric. Some strange values can prevent numeric variables to becoming numeric,</p>
+<p>Let see which columns are character type (potential conversion to numeric or factor, or to drop columns). On a first sight we think we must have most of the columns numeric. Some strange values can prevent numeric variables to becoming numeric, lets find out which values are preventing this to happen. Isolate first character vectors:</p>
 <pre class="r"><code># check which columns are characters (potential transformation to numeric or to drop columns)
 charvars &lt;- colnames(train)[train %&gt;% lapply(class) == &quot;character&quot;]
 charvars</code></pre>
@@ -1955,30 +663,351 @@ charvars</code></pre>
 ## [37] &quot;classe&quot;</code></pre>
 <p>If we omit columns such as: “user_name”, “cvtd_timestamp”, “new_window”, “classe”, we think based on the column names we are dealing with numeric columns. Lets check check their summaries and try to find strange values:</p>
 <pre class="r"><code>strangevalues &lt;- train[,charvars] %&gt;% 
-  select(-c(&quot;user_name&quot;, &quot;cvtd_timestamp&quot;, &quot;new_window&quot;, &quot;classe&quot;)) %&gt;% 
-  pull(.)
-data.frame(values = strangevalues) %&gt;% 
-  count(values) %&gt;% 
-  arrange(desc(n))</code></pre>
-<pre><code>##    values     n
-## 1         14423
-## 2    0.00   234
-## 3 #DIV/0!    61</code></pre>
-<!-- First lets apply some essential variable data types transformations (on test and train data sets). We will be transforming variables and dropping variables that are not needed. First for the training set: -->
-<!-- ```{r columnstranstrain} -->
-<!-- train_ <- train %>%  -->
-<!--   mutate(classe = as.factor(classe), # convert outcome to factor variable -->
-<!--          cvtd_timestamp = dmy_hm(cvtd_timestamp) # convert to date time object -->
-<!--          ) %>%  -->
-<!--   select(-drop.vars) # drop variables wit too many missing observations -->
-<!-- ``` -->
-<!-- ```{r XXXX} -->
-<!-- train_ <- train %>%  -->
-<!--   mutate(classe = as.factor(classe), # convert outcome to factor variable -->
-<!--          cvtd_timestamp = dmy_hm(cvtd_timestamp) # convert to date time object -->
-<!--          ) %>%  -->
-<!--   select(-drop.vars) # drop variables wit too many missing observations -->
-<!-- ``` -->
+  select(-c(&quot;user_name&quot;, &quot;cvtd_timestamp&quot;, &quot;new_window&quot;, &quot;classe&quot;)) 
+
+# lets build a long format df: variable name and value 
+# so we can do group by each variable and check unique values
+# and display top ten occurence of values
+strangevalues %&gt;% 
+  pivot_longer(cols = colnames(strangevalues)) %&gt;% 
+  group_by(value) %&gt;% 
+  count() %&gt;% 
+  ungroup() %&gt;% 
+  arrange(desc(n)) %&gt;% 
+  head(10)</code></pre>
+<pre><code>## # A tibble: 10 x 2
+##    value          n
+##    &lt;chr&gt;      &lt;int&gt;
+##  1 &quot;&quot;        476157
+##  2 &quot;#DIV/0!&quot;   2461
+##  3 &quot;0.00&quot;       523
+##  4 &quot;0.0000&quot;     276
+##  5 &quot;-1.2&quot;        96
+##  6 &quot;-1.1&quot;        86
+##  7 &quot;-1.5&quot;        82
+##  8 &quot;-0.8&quot;        78
+##  9 &quot;-1.4&quot;        76
+## 10 &quot;-0.9&quot;        74</code></pre>
+<p>As seen above a lot of missin values are written as blank string &quot;“, and also there are a lot of values”#DIV/0!&quot; (probably some number division error). We will first force all this column to be converted to numeric, and then we will check missing values inside this columns, and finally remove some additional columns with a lot of missing values:</p>
+<pre class="r"><code>vars.force.conv &lt;- colnames(strangevalues) # list of variables to force conversion
+
+# force conversion (train &amp; test) - from char to num
+train &lt;- train %&gt;% 
+  mutate_at(.vars = vars.force.conv, .funs = as.numeric)
+test &lt;- test %&gt;% 
+  mutate_at(.vars = vars.force.conv, .funs = as.numeric)</code></pre>
+<p>Now we will check again the percentage of missing values for columns we converted from character to numeric in previous step:</p>
+<pre class="r"><code># calculate % of missing rows in each column (observed columns)
+NAs &lt;- train[, vars.force.conv] %&gt;% 
+  map(., ~sum(is.na(.))) %&gt;% 
+  unlist() / nrow(train) 
+
+# create a DF: var and % of missing values in that var
+NAs &lt;- data.frame(var = names(NAs),
+                  missing = NAs) %&gt;% 
+  mutate(missing = round(missing * 100, digits = 1)) %&gt;% 
+  rename(`missing rows %` = missing) %&gt;% 
+  arrange(desc(`missing rows %`))
+rownames(NAs) &lt;- NULL
+
+# extract names of variables to drop
+drop.vars &lt;- NAs %&gt;% filter(`missing rows %` &gt; 90) %&gt;% pull(var) # list of columns to drop (more then 50 % NA)
+
+# show percentage of missing rows
+NAs %&gt;% 
+  kbl() %&gt;% 
+  kable_paper() %&gt;%
+  scroll_box(width = &quot;400px&quot;, height = &quot;500px&quot;)</code></pre>
+<div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:500px; overflow-x: scroll; width:400px; ">
+<table class=" lightable-paper" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+var
+</th>
+<th style="text-align:right;position: sticky; top:0; background-color: #FFFFFF;">
+missing rows %
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+kurtosis_yaw_belt
+</td>
+<td style="text-align:right;">
+100.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_yaw_belt
+</td>
+<td style="text-align:right;">
+100.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_yaw_dumbbell
+</td>
+<td style="text-align:right;">
+100.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_yaw_dumbbell
+</td>
+<td style="text-align:right;">
+100.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_yaw_forearm
+</td>
+<td style="text-align:right;">
+100.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_yaw_forearm
+</td>
+<td style="text-align:right;">
+100.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_roll_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_picth_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_roll_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_pitch_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+max_yaw_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+min_yaw_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+amplitude_yaw_forearm
+</td>
+<td style="text-align:right;">
+98.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_roll_arm
+</td>
+<td style="text-align:right;">
+98.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_picth_arm
+</td>
+<td style="text-align:right;">
+98.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_roll_arm
+</td>
+<td style="text-align:right;">
+98.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_pitch_arm
+</td>
+<td style="text-align:right;">
+98.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_picth_belt
+</td>
+<td style="text-align:right;">
+98.2
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_roll_belt_1
+</td>
+<td style="text-align:right;">
+98.2
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_roll_belt
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_roll_belt
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+max_yaw_belt
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+min_yaw_belt
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+amplitude_yaw_belt
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_yaw_arm
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_yaw_arm
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_roll_dumbbell
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kurtosis_picth_dumbbell
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_roll_dumbbell
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+max_yaw_dumbbell
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+min_yaw_dumbbell
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+amplitude_yaw_dumbbell
+</td>
+<td style="text-align:right;">
+98.1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+skewness_pitch_dumbbell
+</td>
+<td style="text-align:right;">
+98.0
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Table above shows % of misisng rows for forcefully converted columns. As you can see, all columns have almost all missing values (due to blank strings and other characters). So we will also remove all this columns, since they do not bring any added value to the table:</p>
+<pre class="r"><code>train &lt;- train %&gt;% select(-drop.vars) 
+test  &lt;- test %&gt;% select(-drop.vars) </code></pre>
+<p>Finally lets apply some essential variable data types transformations (on test and train data sets). We have to transform outcome variable to factor, and also there are some date time specific columns:</p>
+<pre class="r"><code>train &lt;- train %&gt;%
+  mutate(classe = as.factor(classe), # convert outcome to factor variable
+         cvtd_timestamp = dmy_hm(cvtd_timestamp)) # convert to date time object
+test &lt;- test %&gt;%
+  mutate(classe = as.factor(classe), # convert outcome to factor variable
+         cvtd_timestamp = dmy_hm(cvtd_timestamp)) # convert to date time object</code></pre>
 </div>
 </div>
 <div id="exploratory-data-analysis-eda" class="section level2">

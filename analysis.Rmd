@@ -92,6 +92,7 @@ pml_testing <- read.csv(file = "./data/pmltesting.csv", header = T,
 Now let's do the splitting of **pml_training** data source using caret package.
 
 ```{r datasetsplit}
+set.seed(11235) # seed for split
 train_rows <- createDataPartition(y = pml_training$classe, p = .75, list = F) # do the splitting 
 
 train <- pml_training[train_rows, ] # train data set
@@ -107,29 +108,23 @@ test  <- pml_training[-train_rows, ] # test data set
 Now we will check if there are any columns that have a lot of missing values NAs (potential imputation or removing columns):
 
 ```{r NAs}
-# calculate % of missing rows in each column and show top missing NA vars
+# calculate % of missing rows in each column 
 NAs <- map(train, ~sum(is.na(.))) %>% 
   unlist() / nrow(train) 
 
+# create a DF: var and % of missing values in that var
 NAs <- data.frame(var = names(NAs),
                   missing = NAs) %>% 
   mutate(missing = round(missing * 100, digits = 1)) %>% 
   rename(`missing rows %` = missing) %>% 
   arrange(desc(`missing rows %`))
-
 rownames(NAs) <- NULL
 
-# variables to drop
-drop.vars <- NAs %>% filter(`missing rows %` > 50) %>% pull(var) # list of columns to drop (more then 50 % NA)
-
-NAs %>% 
-  kbl() %>% 
-  kable_paper() %>%
-  scroll_box(width = "500px", height = "500px")
-
+# extract names of variables to drop
+drop.vars <- NAs %>% filter(`missing rows %` > 90) %>% pull(var) # list of columns to drop (more then 50 % NA)
 ```
 
-There are `r length(drop.vars)` variables with almost all missing values. We will drop these variables, since there aren't any added value, if we put them into our modeling procedure. Lets drop columns from train and test dataset:
+There are `r length(drop.vars)` variables with almost all missing values. We will drop these variables, since there aren't any added value, if we put them into our modeling procedure. Lets drop columns from train and test data set:
 
 
 ```{r dropmissingvars}
@@ -138,13 +133,12 @@ test  <- test %>% select(-drop.vars)
 ```
 
 
-Let see which columns are characters (potential conversion to numeric or factor, or to drop columns). On a first sight we think we must have most of the columns numeric. Some strange values can prevent numeric variables to becoming numeric,
+Let see which columns are character type (potential conversion to numeric or factor, or to drop columns). On a first sight we think we must have most of the columns numeric. Some strange values can prevent numeric variables to becoming numeric, lets find out which values are preventing this to happen. Isolate first character vectors:
 
 ```{r whichcolchar}
 # check which columns are characters (potential transformation to numeric or to drop columns)
 charvars <- colnames(train)[train %>% lapply(class) == "character"]
 charvars
-
 ```
 
 If we omit columns such as: "user_name", "cvtd_timestamp", "new_window", "classe", we think based on the column names we are dealing with numeric columns. Lets check check their summaries and try to find strange values:
@@ -153,41 +147,80 @@ If we omit columns such as: "user_name", "cvtd_timestamp", "new_window", "classe
 strangevalues <- train[,charvars] %>% 
   select(-c("user_name", "cvtd_timestamp", "new_window", "classe")) 
 
-strangevalues <- strangevalues %>% 
-  map(., pull(.)) %>% 
-  unlist()
+# lets build a long format df: variable name and value 
+# so we can do group by each variable and check unique values
+# and display top ten occurence of values
+strangevalues %>% 
+  pivot_longer(cols = colnames(strangevalues)) %>% 
+  group_by(value) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  head(10)
+```
 
-#%>% 
-  pull(.)
-data.frame(values = strangevalues) %>% 
-  count(values) %>% 
-  arrange(desc(n))
-  
+As seen above a lot of missin values are written as blank string "", and also there are a lot of values "#DIV/0!" (probably some number division error). We will first force all this column to be converted to numeric, and then we will check missing values inside this columns, and finally remove some additional columns with a lot of missing values:
+
+```{r forceconvchar}
+vars.force.conv <- colnames(strangevalues) # list of variables to force conversion
+
+# force conversion (train & test) - from char to num
+train <- train %>% 
+  mutate_at(.vars = vars.force.conv, .funs = as.numeric)
+test <- test %>% 
+  mutate_at(.vars = vars.force.conv, .funs = as.numeric)
+
 ```
 
 
+Now we will check again the percentage of missing values for columns we converted from character to numeric in previous step:
+
+```{r NAs2ndattempt}
+# calculate % of missing rows in each column (observed columns)
+NAs <- train[, vars.force.conv] %>% 
+  map(., ~sum(is.na(.))) %>% 
+  unlist() / nrow(train) 
+
+# create a DF: var and % of missing values in that var
+NAs <- data.frame(var = names(NAs),
+                  missing = NAs) %>% 
+  mutate(missing = round(missing * 100, digits = 1)) %>% 
+  rename(`missing rows %` = missing) %>% 
+  arrange(desc(`missing rows %`))
+rownames(NAs) <- NULL
+
+# extract names of variables to drop
+drop.vars <- NAs %>% filter(`missing rows %` > 90) %>% pull(var) # list of columns to drop (more then 50 % NA)
+
+# show percentage of missing rows
+NAs %>% 
+  kbl() %>% 
+  kable_paper() %>%
+  scroll_box(width = "400px", height = "500px")
+  
+
+```
+
+Table above shows % of misisng rows for forcefully converted columns. As you can see, all columns have almost all missing values (due to blank strings and other characters). So we will also remove all this columns, since they do not bring any added value to the table:
+
+```{r dropmissingvars2ndattempt}
+train <- train %>% select(-drop.vars) 
+test  <- test %>% select(-drop.vars) 
+```
 
 
-<!-- First lets apply some essential variable data types transformations (on test and train data sets). We will be transforming variables and dropping variables that are not needed. First for the training set: -->
+Finally lets apply some essential variable data types transformations (on test and train data sets). We have to transform outcome variable to factor, and also there are some date time specific columns:
 
-<!-- ```{r columnstranstrain} -->
-<!-- train_ <- train %>%  -->
-<!--   mutate(classe = as.factor(classe), # convert outcome to factor variable -->
-<!--          cvtd_timestamp = dmy_hm(cvtd_timestamp) # convert to date time object -->
-<!--          ) %>%  -->
-<!--   select(-drop.vars) # drop variables wit too many missing observations -->
-<!-- ``` -->
+```{r wrangle}
+train <- train %>%
+  mutate(classe = as.factor(classe), # convert outcome to factor variable
+         cvtd_timestamp = dmy_hm(cvtd_timestamp)) # convert to date time object
+test <- test %>%
+  mutate(classe = as.factor(classe), # convert outcome to factor variable
+         cvtd_timestamp = dmy_hm(cvtd_timestamp)) # convert to date time object
+```
 
 
-
-
-<!-- ```{r XXXX} -->
-<!-- train_ <- train %>%  -->
-<!--   mutate(classe = as.factor(classe), # convert outcome to factor variable -->
-<!--          cvtd_timestamp = dmy_hm(cvtd_timestamp) # convert to date time object -->
-<!--          ) %>%  -->
-<!--   select(-drop.vars) # drop variables wit too many missing observations -->
-<!-- ``` -->
 
 
 ## Exploratory Data Analysis (EDA)
