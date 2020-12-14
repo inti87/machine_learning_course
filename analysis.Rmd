@@ -17,7 +17,7 @@ rm(list = ls())
 graphics.off()
 
 # Load R packages
-packages <- c("dplyr", "ggplot2", "caret", "janitor", "lubridate", "purrr", "kableExtra", "tidyr") # list of packages to load
+packages <- c("dplyr", "ggplot2", "caret", "janitor", "lubridate", "purrr", "kableExtra", "tidyr", "nnet", "naivebayes","rpart", "randomForest", "xgboost", "doParallel", "stringr") # list of packages to load
 package.check <- lapply( # load or install & load list of packages
   packages,
   FUN = function(x) {
@@ -29,6 +29,7 @@ package.check <- lapply( # load or install & load list of packages
 ) 
 rm(packages, package.check)
 ```
+
 
 ## Introduction
 
@@ -225,10 +226,394 @@ test <- test %>%
 
 ## Exploratory Data Analysis (EDA)
 
+First lets check how many users are included in the data:
+```{r different users}
+train %>% 
+  count(user_name)
+```
+
+Now lets check summary of date & date-time related variables:
+
+```{r summarydt}
+# min/max raw timestamp part 1
+train %>% 
+  group_by(user_name) %>% 
+  summarise(min_raw_ts1 = min(raw_timestamp_part_1),
+            max_raw_ts1 = max(raw_timestamp_part_1))
+
+# min/max raw timestamp part 2
+train %>% 
+  group_by(user_name) %>% 
+  summarise(min_raw_ts2 = min(raw_timestamp_part_2),
+            max_raw_ts2 = max(raw_timestamp_part_2))
+
+```
+We think date and date-time related columns are irrelevant for model we are building (that will predict **classe** outcome). Therefore we will drop columns:
+
+* **raw_timestamp_part_1**
+* **raw_timestamp_part_2**
+* **cvtd_timestamp**
+
+Also we will drop column called **new_window**, but at this point we will keep column **num_window**.
+
+```{r dropmissingvars3rdattempt}
+drop.vars <- c("raw_timestamp_part_1", "raw_timestamp_part_2",
+               "cvtd_timestamp", "new_window")
+train <- train %>% select(-drop.vars) 
+test  <- test %>% select(-drop.vars) 
+```
+
+Now lets check how numerical variables are correlated between themselves. We will highlight predictor pairs with high correlation. High correlation might indicate some multicollinearity among predictors, but we hope that this phenomena won't cause any troubles due to selected prediction algorithms.
+
+```{r correlation}
+# we check correlation for only numeric variables
+relevant.vars <- colnames(train)[train %>% lapply(class) %in% c("numeric", "integer")]
+
+cor.mat <- cor(train[, relevant.vars]) # correlation matrix
+diag(cor.mat) <- 0 # set diagonal elements to zero
+cor.mat[upper.tri(cor.mat)] <- 0 # set upper triangular elements to zero
+
+# Top correlation
+inds <- which(abs(cor.mat) > 0.8, arr.ind = TRUE) # index
+
+# cerate table of pairs
+cor.top <- data.frame(Var1 = rownames(cor.mat)[inds[, 1]], 
+                      Var2 = colnames(cor.mat)[inds[, 2]], 
+                      Cor = cor.mat[inds]) %>% 
+  distinct() %>% 
+  arrange(desc(abs(Cor)))
+```
+
+Now lets list predictors and their correlations:
+```{r topcor}
+cor.top
+```
+
+The table above shows pairs of predictors that are highly correlated (in positive or negative direction). We hope this will not cerate any problems for selected prediction algorithms. 
+
+Now lets check how balanced is occurrence of each value in outcome variable (**classe**). Since we have a multi-class classification problem, we must select the adequate performance measure (it can be slightly more complicated than the case with a binary class outcome!):
+
+```{r outcomevalues}
+train %>% 
+  group_by(classe) %>% 
+  count()
+```
+
+
+We can see that classes "B", "C", "D", "E" are more than less balanced, but class "A" has slightly more observations compared to other classes. 
+
 
 
 ## Modeling
 
+In the modeling stage we would like to fit parameters of selected model using train data set. In order to predict outcome variable using test data set (and later validation or final test data set). Selected model types are (keep in mind we are dealing with multi- class classification problem!):
 
-## Results
+* Multinomial logistic regression classification algorithm (R package - **nnet**)
+* Naive Bayes classification algorithm (R package **naivebayes**)
+* k-nearest neighbors (KNN) classification algorithm (inside **caret** package)
+* Recursive Partitioning And Regression Trees classification algorithm (R package - **rpart**)
+* Random Forests classification algorithm (R package *rf*)
+* Xgboost ~ eXtreme Gradient Boosting classification algorithm (R package **xgboost**)
+
+
+First lets set control environment for each model (we are using 10-fold cross-validation in the model fitting stage) and also we would:
+
+```{r controlsetting}
+## Set control parameters for caret package
+#  - cross validations settings (number of folds)
+#  - type of output of models - prediction + probabilities 
+
+nr.CV_folds <- 10 # number of folds - cross validation
+
+# base setting
+control_setting_ <- trainControl(method ="cv",  
+                                number = nr.CV_folds,
+                                classProbs = T)
+```
+
+
+### Model training
+
+Some model fit procedure uses parallel computing, if you will use the RMarkdown code please set number of cores according to your PV (where you will evaluate the code !).
+
+Now lets execute model training (fit model parameters) using train dataset:
+
+```{r modelfit, cache=TRUE}
+
+
+# Model fit
+
+## k-nearest neighbors (KNN)
+set.seed(11235)
+knn_time_start <- Sys.time() # time start
+knn_fit <- train(classe ~ ., 
+                 data = train, 
+                 method = "knn", 
+                 trControl = control_setting_)
+knn_time_end <- Sys.time() # time end
+
+
+## Recursive Partitioning And Regression Trees 
+set.seed(11235)
+rprt_time_start <- Sys.time() # time start
+rprt_fit <- train(classe ~ ., 
+                  data = train, 
+                  method = "rpart", 
+                  trControl = control_setting_)
+rprt_time_end <- Sys.time() # time end
+
+
+#----------------------------------------#
+## Parallel core processing ..... begin
+#----------------------------------------#
+
+## All subsequent models are then run in parallel
+nc <- 16 # number of cores
+#cl <- makeCluster(nc) # set cores number (to be used)
+cl <- makePSOCKcluster(nc) # set cores number 
+registerDoParallel(cl) 
+
+
+## Multinomial logistic regression
+set.seed(11235)
+mlr_time_start <- Sys.time() # time start
+mlr_fit <- train(classe ~ ., 
+                 data = train, 
+                 method = "nnet", 
+                 trControl = control_setting_,
+                 allowParallel = T)
+mlr_time_end <- Sys.time() # time end
+
+
+## Naive Bayes
+set.seed(11235)
+nb_time_start <- Sys.time() # time start
+nb_fit <- train(classe ~ ., 
+                data = train, 
+                method = "nb", 
+                trControl = control_setting_,
+                allowParallel = T)
+nb_time_end <- Sys.time() # time end
+
+
+## Random Forests
+set.seed(11235)
+rf_time_start <- Sys.time() # time start
+rf_fit <- train(classe ~ ., 
+                data = train, 
+                method = "rf", 
+                trControl = control_setting_,
+                allowParallel = T)
+rf_time_end <- Sys.time() # time end
+
+
+
+## Xgboost ~ eXtreme Gradient Boosting
+set.seed(11235)
+xgb_time_start <- Sys.time() # time start
+xgb_fit <- train(classe ~ ., 
+                 data = train, 
+                 method = "xgbTree",
+                 trControl = control_setting_,
+                 allowParallel = T)
+xgb_time_end <- Sys.time() # time end
+
+
+## When you are done:
+on.exit(stopCluster(cl))
+env <- foreach:::.foreachGlobals
+rm(list=ls(name=env), pos=env)
+  
+
+#----------------------------------------#
+## Parallel core processing ..... end
+#----------------------------------------#
+
+```
+
+Time spent to fit each model are shown below:
+
+```{r modelfittime}
+# Gather model estimation running time
+model.fit.time <- tibble(model = c("k-nearest neighbors", "Recursive Partitioning And Regression Trees", "Multinomial logistic regression", "Naive Bayes", "Random Forests", "Xgboost"),
+                            `multi-core estimation` = c(F, F, T, T, T, T),
+                            `time in sec` = c(round(difftime(knn_time_end, knn_time_start, units = "secs"),0),
+round(difftime(rprt_time_end, rprt_time_start, units = "secs"),0),
+round(difftime(mlr_time_end, mlr_time_start, units = "secs"),0),
+round(difftime(nb_time_end, nb_time_start, units = "secs"),0),
+round(difftime(rf_time_end, rf_time_start, units = "secs"),0),
+round(difftime(xgb_time_end, xgb_time_start, units = "secs"),0)))
+
+# show time
+model.fit.time %>% 
+  kbl() %>% 
+  kable_paper() %>%
+  scroll_box(width = "100%", height = "100%")
+
+```
+
+
+
+### Model benchmark
+
+First lets use our fitted model and predict the outcome variable (**classe**) on the test data set:
+
+```{r modelprediction, cache=TRUE}
+
+# model predictions
+pred_knn  <- predict(knn_fit, newdata = test)
+pred_rprt <- predict(rprt_fit, newdata = test)
+pred_mlr  <- predict(mlr_fit, newdata = test)
+pred_nb   <- predict(nb_fit, newdata = test)
+pred_rf   <- predict(rf_fit, newdata = test)
+pred_xgb  <- predict(xgb_fit, newdata = test)
+
+```
+
+
+Now let's calculate performance measures for each model, using predicted values of the outcome variable and actual values (on the test data set):
+
+```{r modelperf}
+
+# perfomance measures 
+perf_knn  <- confusionMatrix(pred_knn, test$classe)
+perf_rprt <- confusionMatrix(pred_rprt, test$classe)
+perf_mlr  <- confusionMatrix(pred_mlr, test$classe)
+perf_nb   <- confusionMatrix(pred_nb, test$classe)
+perf_rf   <- confusionMatrix(pred_rf, test$classe)
+perf_xgb  <- confusionMatrix(pred_xgb, test$classe)
+
+```
+
+For model benchmark we will be using given model performance measures:
+
+* **Balanced Accuracy**
+* Overall **Sensitivity**
+* Overall **Specificity**
+
+All measures are calculated for each model and each observed class of the outcome variable ("A", "B", "C", "D", "E"). **Balanced Accuracy** will tell us how accurate is model to predict the right class of the outcome variable. Overall **Sensitivity** will tell us probability that model predicted class = $i$ when the actual class is $i$. And overall **Specificity** will tell us probability that model predicted class not equal to $i$ when the actual class is not equal to $i$. We are gonna build a data frame of measures, therefore we will be able to visualize modle benchmark:
+
+```{r model benchmarkprep}
+
+# Create a DFs (individual)
+
+# df.knn <- perf_knn$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
+#   as.data.frame() %>% 
+#   mutate(class = classes,
+#          model = "k-nearest neighbors") %>% 
+#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+#                names_to = "metric", values_to = "value") %>% 
+#   select(model, class, everything()) %>%
+#   mutate(class = as.factor(class))
+# 
+# df.rprt <- perf_rprt$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
+#   as.data.frame() %>% 
+#   mutate(class = classes,
+#          model = "Recur. Part. Reg. Trees") %>% 
+#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+#                names_to = "metric", values_to = "value") %>% 
+#   select(model, class, everything()) %>%
+#   mutate(class = as.factor(class))
+# 
+# df.mlr <- perf_mlr$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
+#   as.data.frame() %>% 
+#   mutate(class = classes,
+#          model = "Multi. log. reg.") %>% 
+#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+#                names_to = "metric", values_to = "value") %>% 
+#   select(model, class, everything()) %>%
+#   mutate(class = as.factor(class))
+# 
+# df.nb <- perf_nb$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
+#   as.data.frame() %>% 
+#   mutate(class = classes,
+#          model = "Naive Bayes") %>% 
+#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+#                names_to = "metric", values_to = "value") %>% 
+#   select(model, class, everything()) %>%
+#   mutate(class = as.factor(class))
+# 
+# df.rf <- perf_rf$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
+#   as.data.frame() %>% 
+#   mutate(class = classes,
+#          model = "Random Forests") %>% 
+#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+#                names_to = "metric", values_to = "value") %>% 
+#   select(model, class, everything()) %>%
+#   mutate(class = as.factor(class))
+# 
+# df.xgb <- perf_xgb$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
+#   as.data.frame() %>% 
+#   mutate(class = classes,
+#          model = "Xgboost") %>% 
+#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+#                names_to = "metric", values_to = "value") %>% 
+#   select(model, class, everything()) %>%
+#   mutate(class = as.factor(class))
+# 
+# 
+# # Merged dfs
+# df.perf <- bind_rows(df.knn, df.rprt, df.mlr, df.nb, df.rf, df.xgb) %>% 
+#   mutate(model = as.factor(model),
+#          class = as.factor(class),
+#          metric = factor(metric, levels = c("Balanced Accuracy", "Sensitivity", "Specificity")))
+
+```
+
+Now lets visualize the results (first accuracy):
+
+```{r perfacc}
+df.perf %>% 
+  filter(metric == "Balanced Accuracy") %>% 
+  ggplot(aes(x = class, y = value, color = model, group = model)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  scale_color_viridis_d() +
+  ggtitle("Balanced Accuracy (for each class) - test data set")
+  
+```
+ 
+As we can see from the figure above, XGboost algorithm and Random Forests algorithm are quite dominant regarding accuracy (both are very close to 100% accuracy for selected classes). Now lets see Sensitivity and Specificity:
+
+```{r perfsenspec}
+df.perf %>% 
+  filter(metric != "Balanced Accuracy") %>% 
+  ggplot(aes(x = class, y = value, color = model, group = model)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  facet_grid(metric ~ .) +
+  scale_color_viridis_d() +
+  ggtitle("Sensitivity & Specificity (for each class) - test data set")
+  
+```
+The second figure also shows that Random Forests algorithm and Xgboost algorithm are best regarding Sensitivity and Specificity. Now lets draw a final figure showing all metrics on one figure (average metric values over all classes):
+
+```{r perfallshow}
+df.perf %>% 
+  group_by(model, metric) %>% 
+  summarise(`Average value` = mean(value)) %>% 
+  pivot_wider(id_cols = "model", 
+              names_from = "metric", 
+              values_from = "Average value") %>% 
+  ggplot(aes(x = Sensitivity, y = Specificity, 
+             size = `Balanced Accuracy`, fill = model)) +
+  geom_point(shape = 21, color = "black") +
+  scale_fill_viridis_d() +
+  ggtitle("Selected metrics - average values (over classes)")
+
+```
+We will check top 2 performers using table, to be certain which algorithm to pick for final prediction (on test-validation set):
+
+```{r topperformersmetrics}
+df.perf %>% 
+  filter(model %in% c("Random Forests", "Xgboost")) %>% 
+  group_by(model, metric) %>% 
+  summarise(`Average value` = mean(value)) %>% 
+  pivot_wider(id_cols = "model", names_from = "metric", values_from = "Average value")
+```
+
+The model predictions are very good and very close, but by a very small difference we can see that model **Xgboost** algorithm outperformed **Random Forests** algorithm. Therefore our final selected model is **Xgboost**.
+
+
+## Results (final prediction)
 

@@ -1012,9 +1012,349 @@ test &lt;- test %&gt;%
 </div>
 <div id="exploratory-data-analysis-eda" class="section level2">
 <h2>Exploratory Data Analysis (EDA)</h2>
+<p>First lets check how many users are included in the data:</p>
+<pre class="r"><code>train %&gt;% 
+  count(user_name)</code></pre>
+<pre><code>##   user_name    n
+## 1    adelmo 2913
+## 2  carlitos 2342
+## 3   charles 2656
+## 4    eurico 2310
+## 5    jeremy 2527
+## 6     pedro 1970</code></pre>
+<p>Now lets check summary of date &amp; date-time related variables:</p>
+<pre class="r"><code># min/max raw timestamp part 1
+train %&gt;% 
+  group_by(user_name) %&gt;% 
+  summarise(min_raw_ts1 = min(raw_timestamp_part_1),
+            max_raw_ts1 = max(raw_timestamp_part_1))</code></pre>
+<pre><code>## # A tibble: 6 x 3
+##   user_name min_raw_ts1 max_raw_ts1
+##   &lt;chr&gt;           &lt;int&gt;       &lt;int&gt;
+## 1 adelmo     1322832772  1322832945
+## 2 carlitos   1323084231  1323084356
+## 3 charles    1322837808  1322837962
+## 4 eurico     1322489605  1322489730
+## 5 jeremy     1322673025  1322673166
+## 6 pedro      1323094968  1323095081</code></pre>
+<pre class="r"><code># min/max raw timestamp part 2
+train %&gt;% 
+  group_by(user_name) %&gt;% 
+  summarise(min_raw_ts2 = min(raw_timestamp_part_2),
+            max_raw_ts2 = max(raw_timestamp_part_2))</code></pre>
+<pre><code>## # A tibble: 6 x 3
+##   user_name min_raw_ts2 max_raw_ts2
+##   &lt;chr&gt;           &lt;int&gt;       &lt;int&gt;
+## 1 adelmo            294      998669
+## 2 carlitos          367      998176
+## 3 charles           315      997179
+## 4 eurico           2647      998801
+## 5 jeremy           2674      998716
+## 6 pedro             317      996405</code></pre>
+<p>We think date and date-time related columns are irrelevant for model we are building (that will predict <strong>classe</strong> outcome). Therefore we will drop columns:</p>
+<ul>
+<li><strong>raw_timestamp_part_1</strong></li>
+<li><strong>raw_timestamp_part_2</strong></li>
+<li><strong>cvtd_timestamp</strong></li>
+</ul>
+<p>Also we will drop column called <strong>new_window</strong>, but at this point we will keep column <strong>num_window</strong>.</p>
+<pre class="r"><code>drop.vars &lt;- c(&quot;raw_timestamp_part_1&quot;, &quot;raw_timestamp_part_2&quot;,
+               &quot;cvtd_timestamp&quot;, &quot;new_window&quot;)
+train &lt;- train %&gt;% select(-drop.vars) 
+test  &lt;- test %&gt;% select(-drop.vars) </code></pre>
+<p>Now lets check how numerical variables are correlated between themselves. We will highlight predictor pairs with high correlation. High correlation might indicate some multicollinearity among predictors, but we hope that this phenomena won’t cause any troubles due to selected prediction algorithms.</p>
+<pre class="r"><code># we check correlation for only numeric variables
+relevant.vars &lt;- colnames(train)[train %&gt;% lapply(class) %in% c(&quot;numeric&quot;, &quot;integer&quot;)]
+
+cor.mat &lt;- cor(train[, relevant.vars]) # correlation matrix
+diag(cor.mat) &lt;- 0 # set diagonal elements to zero
+cor.mat[upper.tri(cor.mat)] &lt;- 0 # set upper triangular elements to zero
+
+# Top correlation
+inds &lt;- which(abs(cor.mat) &gt; 0.8, arr.ind = TRUE) # index
+
+# cerate table of pairs
+cor.top &lt;- data.frame(Var1 = rownames(cor.mat)[inds[, 1]], 
+                      Var2 = colnames(cor.mat)[inds[, 2]], 
+                      Cor = cor.mat[inds]) %&gt;% 
+  distinct() %&gt;% 
+  arrange(desc(abs(Cor)))</code></pre>
+<p>Now lets list predictors and their correlations:</p>
+<pre class="r"><code>cor.top</code></pre>
+<pre><code>##                Var1             Var2        Cor
+## 1      accel_belt_z        roll_belt -0.9920233
+## 2  gyros_dumbbell_z gyros_dumbbell_x -0.9836325
+## 3  total_accel_belt        roll_belt  0.9805880
+## 4      accel_belt_z total_accel_belt -0.9743945
+## 5      accel_belt_x       pitch_belt -0.9644992
+## 6   gyros_forearm_z gyros_dumbbell_z  0.9482223
+## 7   gyros_forearm_z gyros_dumbbell_x -0.9333282
+## 8      accel_belt_z     accel_belt_y -0.9322084
+## 9      accel_belt_y total_accel_belt  0.9272485
+## 10     accel_belt_y        roll_belt  0.9236888
+## 11      gyros_arm_y      gyros_arm_x -0.9188930
+## 12    magnet_belt_x     accel_belt_x  0.8871633
+## 13    magnet_belt_x       pitch_belt -0.8780330
+## 14  gyros_forearm_z  gyros_forearm_y  0.8694208
+## 15 accel_dumbbell_z     yaw_dumbbell  0.8483225
+## 16     magnet_arm_z     magnet_arm_y  0.8147423
+## 17     magnet_arm_x      accel_arm_x  0.8143423
+## 18         yaw_belt        roll_belt  0.8139859
+## 19 accel_dumbbell_x   pitch_dumbbell  0.8077293</code></pre>
+<p>The table above shows pairs of predictors that are highly correlated (in positive or negative direction). We hope this will not cerate any problems for selected prediction algorithms.</p>
+<p>Now lets check how balanced is occurrence of each value in outcome variable (<strong>classe</strong>). Since we have a multi-class classification problem, we must select the adequate performance measure (it can be slightly more complicated than the case with a binary class outcome!):</p>
+<pre class="r"><code>train %&gt;% 
+  group_by(classe) %&gt;% 
+  count()</code></pre>
+<pre><code>## # A tibble: 5 x 2
+## # Groups:   classe [5]
+##   classe     n
+##   &lt;fct&gt;  &lt;int&gt;
+## 1 A       4185
+## 2 B       2848
+## 3 C       2567
+## 4 D       2412
+## 5 E       2706</code></pre>
+<p>We can see that classes “B”, “C”, “D”, “E” are more than less balanced, but class “A” has slightly more observations compared to other classes.</p>
 </div>
 <div id="modeling" class="section level2">
 <h2>Modeling</h2>
+<p>In the modeling stage we would like to fit parameters of selected model using train data set. In order to predict outcome variable using test data set (and later validation or final test data set). Selected model types are (keep in mind we are dealing with multi- class classification problem!):</p>
+<ul>
+<li>Multinomial logistic regression classification algorithm (R package - <strong>nnet</strong>)</li>
+<li>Naive Bayes classification algorithm (R package <strong>naivebayes</strong>)</li>
+<li>k-nearest neighbors (KNN) classification algorithm (inside <strong>caret</strong> package)</li>
+<li>Recursive Partitioning And Regression Trees classification algorithm (R package - <strong>rpart</strong>)</li>
+<li>Random Forests classification algorithm (R package <em>rf</em>)</li>
+<li>Xgboost ~ eXtreme Gradient Boosting classification algorithm (R package <strong>xgboost</strong>)</li>
+</ul>
+<p>First lets set control environment for each model (we are using 10-fold cross-validation in the model fitting stage) and also we would:</p>
+<pre class="r"><code>## Set control parameters for caret package
+#  - cross validations settings (number of folds)
+#  - type of output of models - prediction + probabilities 
+
+nr.CV_folds &lt;- 10 # number of folds - cross validation
+
+# base setting
+control_setting_ &lt;- trainControl(method =&quot;cv&quot;,  
+                                number = nr.CV_folds,
+                                classProbs = T)</code></pre>
+<div id="model-training" class="section level3">
+<h3>Model training</h3>
+<p>Some model fit procedure uses parallel computing, if you will use the RMarkdown code please set number of cores according to your PV (where you will evaluate the code !).</p>
+<p>Now lets execute model training (fit model parameters) using train dataset:</p>
+<pre class="r"><code># Model fit
+
+## k-nearest neighbors (KNN)
+set.seed(11235)
+knn_time_start &lt;- Sys.time() # time start
+knn_fit &lt;- train(classe ~ ., 
+                 data = train, 
+                 method = &quot;knn&quot;, 
+                 trControl = control_setting_)
+knn_time_end &lt;- Sys.time() # time end
+
+
+## Recursive Partitioning And Regression Trees 
+set.seed(11235)
+rprt_time_start &lt;- Sys.time() # time start
+rprt_fit &lt;- train(classe ~ ., 
+                  data = train, 
+                  method = &quot;rpart&quot;, 
+                  trControl = control_setting_)
+rprt_time_end &lt;- Sys.time() # time end
+
+
+#----------------------------------------#
+## Parallel core processing ..... begin
+#----------------------------------------#
+
+## All subsequent models are then run in parallel
+nc &lt;- 16 # number of cores
+#cl &lt;- makeCluster(nc) # set cores number (to be used)
+cl &lt;- makePSOCKcluster(nc) # set cores number 
+registerDoParallel(cl) 
+
+
+## Multinomial logistic regression
+set.seed(11235)
+mlr_time_start &lt;- Sys.time() # time start
+mlr_fit &lt;- train(classe ~ ., 
+                 data = train, 
+                 method = &quot;nnet&quot;, 
+                 trControl = control_setting_,
+                 allowParallel = T)</code></pre>
+<pre><code>## # weights:  325
+## initial  value 25134.493018 
+## iter  10 value 21852.788974
+## iter  20 value 21534.610199
+## iter  30 value 21076.298589
+## iter  40 value 20707.307251
+## iter  50 value 20497.477938
+## iter  60 value 20217.934443
+## iter  70 value 19993.676606
+## iter  80 value 19795.367589
+## iter  90 value 19369.300715
+## iter 100 value 19272.200591
+## final  value 19272.200591 
+## stopped after 100 iterations</code></pre>
+<pre class="r"><code>mlr_time_end &lt;- Sys.time() # time end
+
+
+## Naive Bayes
+set.seed(11235)
+nb_time_start &lt;- Sys.time() # time start
+nb_fit &lt;- train(classe ~ ., 
+                data = train, 
+                method = &quot;nb&quot;, 
+                trControl = control_setting_,
+                allowParallel = T)
+nb_time_end &lt;- Sys.time() # time end
+
+
+## Random Forests
+set.seed(11235)
+rf_time_start &lt;- Sys.time() # time start
+rf_fit &lt;- train(classe ~ ., 
+                data = train, 
+                method = &quot;rf&quot;, 
+                trControl = control_setting_,
+                allowParallel = T)
+rf_time_end &lt;- Sys.time() # time end
+
+
+
+## Xgboost ~ eXtreme Gradient Boosting
+set.seed(11235)
+xgb_time_start &lt;- Sys.time() # time start
+xgb_fit &lt;- train(classe ~ ., 
+                 data = train, 
+                 method = &quot;xgbTree&quot;,
+                 trControl = control_setting_,
+                 allowParallel = T)</code></pre>
+<pre><code>## [18:47:03] WARNING: amalgamation/../src/learner.cc:516: 
+## Parameters: { allowParallel } might not be used.
+## 
+##   This may not be accurate due to some parameters are only used in language bindings but
+##   passed down to XGBoost core.  Or some parameters are not used but slip through this
+##   verification. Please open an issue if you find above cases.</code></pre>
+<pre class="r"><code>xgb_time_end &lt;- Sys.time() # time end
+
+
+## When you are done:
+on.exit(stopCluster(cl))
+env &lt;- foreach:::.foreachGlobals
+rm(list=ls(name=env), pos=env)
+  
+
+#----------------------------------------#
+## Parallel core processing ..... end
+#----------------------------------------#</code></pre>
+<p>Time spent to fit each model are shown below:</p>
+<pre class="r"><code># Gather model estimation running time
+model.fit.time &lt;- tibble(model = c(&quot;k-nearest neighbors&quot;, &quot;Recursive Partitioning And Regression Trees&quot;, &quot;Multinomial logistic regression&quot;, &quot;Naive Bayes&quot;, &quot;Random Forests&quot;, &quot;Xgboost&quot;),
+                            `multi-core estimation` = c(F, F, T, T, T, T),
+                            `time in sec` = c(round(difftime(knn_time_end, knn_time_start, units = &quot;secs&quot;),0),
+round(difftime(rprt_time_end, rprt_time_start, units = &quot;secs&quot;),0),
+round(difftime(mlr_time_end, mlr_time_start, units = &quot;secs&quot;),0),
+round(difftime(nb_time_end, nb_time_start, units = &quot;secs&quot;),0),
+round(difftime(rf_time_end, rf_time_start, units = &quot;secs&quot;),0),
+round(difftime(xgb_time_end, xgb_time_start, units = &quot;secs&quot;),0)))
+
+# show time
+model.fit.time %&gt;% 
+  kbl() %&gt;% 
+  kable_paper() %&gt;%
+  scroll_box(width = &quot;100%&quot;, height = &quot;100%&quot;)</code></pre>
+<div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:100%; overflow-x: scroll; width:100%; ">
+<table class=" lightable-paper" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+model
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+multi-core estimation
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+time in sec
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+k-nearest neighbors
+</td>
+<td style="text-align:left;">
+FALSE
+</td>
+<td style="text-align:left;">
+71 secs
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Recursive Partitioning And Regression Trees
+</td>
+<td style="text-align:left;">
+FALSE
+</td>
+<td style="text-align:left;">
+6 secs
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Multinomial logistic regression
+</td>
+<td style="text-align:left;">
+TRUE
+</td>
+<td style="text-align:left;">
+62 secs
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Naive Bayes
+</td>
+<td style="text-align:left;">
+TRUE
+</td>
+<td style="text-align:left;">
+49 secs
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Random Forests
+</td>
+<td style="text-align:left;">
+TRUE
+</td>
+<td style="text-align:left;">
+238 secs
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Xgboost
+</td>
+<td style="text-align:left;">
+TRUE
+</td>
+<td style="text-align:left;">
+330 secs
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="model-benchmark" class="section level3">
+<h3>Model benchmark</h3>
+</div>
 </div>
 <div id="results" class="section level2">
 <h2>Results</h2>
