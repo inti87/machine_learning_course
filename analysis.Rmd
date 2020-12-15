@@ -8,7 +8,7 @@ output:
 ---
 
 ```{r setoptions, echo=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, fig.width = 7, fig.height = 3,
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, fig.width = 10, fig.height = 6,
                       warning = FALSE)
 ```
 
@@ -495,68 +495,74 @@ All measures are calculated for each model and each observed class of the outcom
 
 ```{r model benchmarkprep}
 
+# vector of classes
+classes <- perf_knn$byClass %>% 
+  rownames() %>% 
+  as.character() %>% 
+  str_sub(string = ., start = 8, end = 8)
+
 # Create a DFs (individual)
 
-# df.knn <- perf_knn$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
-#   as.data.frame() %>% 
-#   mutate(class = classes,
-#          model = "k-nearest neighbors") %>% 
-#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
-#                names_to = "metric", values_to = "value") %>% 
-#   select(model, class, everything()) %>%
-#   mutate(class = as.factor(class))
-# 
-# df.rprt <- perf_rprt$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
-#   as.data.frame() %>% 
-#   mutate(class = classes,
-#          model = "Recur. Part. Reg. Trees") %>% 
-#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
-#                names_to = "metric", values_to = "value") %>% 
-#   select(model, class, everything()) %>%
-#   mutate(class = as.factor(class))
-# 
-# df.mlr <- perf_mlr$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
-#   as.data.frame() %>% 
-#   mutate(class = classes,
-#          model = "Multi. log. reg.") %>% 
-#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
-#                names_to = "metric", values_to = "value") %>% 
-#   select(model, class, everything()) %>%
-#   mutate(class = as.factor(class))
-# 
-# df.nb <- perf_nb$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
-#   as.data.frame() %>% 
-#   mutate(class = classes,
-#          model = "Naive Bayes") %>% 
-#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
-#                names_to = "metric", values_to = "value") %>% 
-#   select(model, class, everything()) %>%
-#   mutate(class = as.factor(class))
-# 
-# df.rf <- perf_rf$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
-#   as.data.frame() %>% 
-#   mutate(class = classes,
-#          model = "Random Forests") %>% 
-#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
-#                names_to = "metric", values_to = "value") %>% 
-#   select(model, class, everything()) %>%
-#   mutate(class = as.factor(class))
-# 
-# df.xgb <- perf_xgb$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>% 
-#   as.data.frame() %>% 
-#   mutate(class = classes,
-#          model = "Xgboost") %>% 
-#   pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
-#                names_to = "metric", values_to = "value") %>% 
-#   select(model, class, everything()) %>%
-#   mutate(class = as.factor(class))
-# 
-# 
-# # Merged dfs
-# df.perf <- bind_rows(df.knn, df.rprt, df.mlr, df.nb, df.rf, df.xgb) %>% 
-#   mutate(model = as.factor(model),
-#          class = as.factor(class),
-#          metric = factor(metric, levels = c("Balanced Accuracy", "Sensitivity", "Specificity")))
+df.knn <- perf_knn$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>%
+  as.data.frame() %>%
+  mutate(class = classes,
+         model = "k-nearest neighbors") %>%
+  pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+               names_to = "metric", values_to = "value") %>%
+  select(model, class, everything()) %>%
+  mutate(class = as.factor(class))
+
+df.rprt <- perf_rprt$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>%
+  as.data.frame() %>%
+  mutate(class = classes,
+         model = "Recur. Part. Reg. Trees") %>%
+  pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+               names_to = "metric", values_to = "value") %>%
+  select(model, class, everything()) %>%
+  mutate(class = as.factor(class))
+
+df.mlr <- perf_mlr$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>%
+  as.data.frame() %>%
+  mutate(class = classes,
+         model = "Multi. log. reg.") %>%
+  pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+               names_to = "metric", values_to = "value") %>%
+  select(model, class, everything()) %>%
+  mutate(class = as.factor(class))
+
+df.nb <- perf_nb$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>%
+  as.data.frame() %>%
+  mutate(class = classes,
+         model = "Naive Bayes") %>%
+  pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+               names_to = "metric", values_to = "value") %>%
+  select(model, class, everything()) %>%
+  mutate(class = as.factor(class))
+
+df.rf <- perf_rf$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>%
+  as.data.frame() %>%
+  mutate(class = classes,
+         model = "Random Forests") %>%
+  pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+               names_to = "metric", values_to = "value") %>%
+  select(model, class, everything()) %>%
+  mutate(class = as.factor(class))
+
+df.xgb <- perf_xgb$byClass[, c("Balanced Accuracy", "Sensitivity", "Specificity")] %>%
+  as.data.frame() %>%
+  mutate(class = classes,
+         model = "Xgboost") %>%
+  pivot_longer(cols = c("Balanced Accuracy", "Sensitivity", "Specificity"),
+               names_to = "metric", values_to = "value") %>%
+  select(model, class, everything()) %>%
+  mutate(class = as.factor(class))
+
+
+# Merged dfs
+df.perf <- bind_rows(df.knn, df.rprt, df.mlr, df.nb, df.rf, df.xgb) %>%
+  mutate(model = as.factor(model),
+         class = as.factor(class),
+         metric = factor(metric, levels = c("Balanced Accuracy", "Sensitivity", "Specificity")))
 
 ```
 
@@ -616,4 +622,20 @@ The model predictions are very good and very close, but by a very small differen
 
 
 ## Results (final prediction)
+
+In the final step of this analysis we will use our top performing model and apply predictions using test-validation set (20 provided measurements). We won't be able to validate the corrections of the results, since actual classes of outcome variable are not provided:
+
+```{r finalpredictions}
+# predictions
+pml_testing$classe_predicted <- predict(xgb_fit, pml_testing)
+
+pml_testing %>% 
+  rename(`classe predicted` = classe_predicted) %>% 
+  mutate(`row id` = row_number()) %>% 
+  select(`row id`, `classe predicted`, everything()) %>% 
+  kbl() %>% 
+  kable_paper() %>%
+  scroll_box(width = "100%", height = "100%")
+
+```
 
